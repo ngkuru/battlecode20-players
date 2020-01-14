@@ -155,6 +155,7 @@ public strictfp class RobotPlayer {
         // As a general rule, if reached target, disable target
         // Else if going to soup but target is no longer in soupLocations, disable target
         // TODO: Else if can see target but no soup or water - disable but without clash and multibroadcasting
+        // TODO: Else if the target was going to a refinery but it was removed, update
         if (target != null && rc.getLocation() == target) {
             changeTarget(null, null);
         } else if (goingTo == "soup" && !soupLocations.contains(target)) {
@@ -198,7 +199,6 @@ public strictfp class RobotPlayer {
 
         // If inventory is full and not already going to a refinery, set target to a refinery
         if (rc.getSoupCarrying() == RobotType.MINER.soupLimit && goingTo != "refinery") {
-            /*
             // Search for nearby refineries
             ArrayList<MapLocation> availableRefineries = new ArrayList<MapLocation>();
             for (MapLocation ref : refineryLocations) {
@@ -213,7 +213,8 @@ public strictfp class RobotPlayer {
             // Else if no refinery and enough money to build and broadcast, build one
             // If all else fails, target the HQ
             if (availableRefineries.size() > 0) {
-                changeTarget(soupLocations.get(rand.nextInt(availableRefineries.size())), "refinery");
+                MapLocation refLoc = availableRefineries.get(rand.nextInt(availableRefineries.size()));
+                changeTarget(refLoc, "refinery");
             } else if (rc.getTeamSoup() > RobotType.REFINERY.cost) {
                 for (Direction d : directions) {
                     if (tryBuild(RobotType.REFINERY, d)) {
@@ -224,8 +225,6 @@ public strictfp class RobotPlayer {
             } else {
                 changeTarget(hqLoc, "refinery");
             }
-            */
-            changeTarget(hqLoc, "refinery");
         }
 
         // If there is a target, try to go to the target and add new location to the list, if fails or no target, move randomly
