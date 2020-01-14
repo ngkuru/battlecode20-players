@@ -24,6 +24,8 @@ public strictfp class RobotPlayer {
     static int turnCount;
     static int numMiners = 0;
 
+    static boolean newMiner;
+
     static MapLocation hqLoc;
     static MapLocation target;
     static ArrayList<MapLocation> soupLocations = new ArrayList<MapLocation>();
@@ -111,23 +113,19 @@ public strictfp class RobotPlayer {
             soupLocations.add(soupLoc);
             broadcastLocation(soupLocations.get(0), "soup", 1);
         }
-        // TODO: Create a blacklist for soup locations that are unreachable
-        // Else if we know where soup is, set target to soup
-        if (soupLoc != null) {
-            changeTarget(soupLoc, "soup");
-        } else if (target == null && soupLocations.size() > 0) {
-            changeTarget(soupLocations.get(rand.nextInt(soupLocations.size())), "soup");
+
+        // If there is a new miner, broadcast any soup location
+        if (newMiner == true) {
+            broadcastLocation(soupLocations.get(0), "soup", 1);
+            newMiner = false;
         }
 
-        // Create 10 miners in the beginning of the game
-        if (numMiners < 10) {
+        // Create some miners in the beginning of the game
+        if (numMiners < 6) {
             for (Direction dir : directions) {
                 if (tryBuild(RobotType.MINER, dir)) {
                     numMiners++;
-                    //If successful, broadcast any soup location if known
-                    if (soupLocations.size() > 0) {
-                        broadcastLocation(soupLocations.get(0), "soup", 1);
-                    }
+                    newMiner = true;
                 }
             }
         }
@@ -168,7 +166,7 @@ public strictfp class RobotPlayer {
         // Else if we know where soup is, set target to soup
         if (soupLoc != null) {
             changeTarget(soupLoc, "soup");
-        } else if (target == null && soupLocations.size() > 0) {
+        } else if ((target == null || goingTo == "beginning") && soupLocations.size() > 0) {
             changeTarget(soupLocations.get(rand.nextInt(soupLocations.size())), "soup");
         }
 
@@ -176,9 +174,13 @@ public strictfp class RobotPlayer {
         for (Direction dir : directions) {
             if (tryMine(dir)) {
                 changeTarget(null, null);
-                // If soup location is unknown, share it with others
-                if (!soupLocations.contains(rc.getLocation().add(dir))) {
+                // If soup location still has soup is unknown, share it with others
+                if (rc.senseSoup(rc.getLocation().add(dir)) > 0 && !soupLocations.contains(rc.getLocation().add(dir))) {
                     broadcastLocation(rc.getLocation().add(dir), "soup", 1);
+                }
+                // If soup location has no more soup and is known, share the news
+                if (rc.senseSoup(rc.getLocation().add(dir)) == 0 && soupLocations.contains(rc.getLocation().add(dir))) {
+                    broadcastLocation(rc.getLocation().add(dir), "no soup", 1);
                 }
             }
         }
