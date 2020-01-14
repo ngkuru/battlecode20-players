@@ -30,9 +30,10 @@ public strictfp class RobotPlayer {
     static MapLocation target;
     static ArrayList<MapLocation> soupLocations = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> locationsTowardsTarget = new ArrayList<MapLocation>();
+    static ArrayList<MapLocation> refineryLocations = new ArrayList<MapLocation>();
 
     // This will be a string of the robot's current task
-    static String[] goingToCodes = {"soup", "HQ", "beginning"};
+    static String[] goingToCodes = {"soup", "HQ", "beginning", "refinery"};
     static String goingTo;
 
     /**
@@ -93,6 +94,7 @@ public strictfp class RobotPlayer {
         for (RobotInfo robot : robots) {
             if (robot.type == RobotType.HQ && robot.team == rc.getTeam()) {
                 hqLoc = robot.location;
+                refineryLocations.add(hqLoc);
                 return;
             }
         }
@@ -103,8 +105,8 @@ public strictfp class RobotPlayer {
     static void runHQ() throws GameActionException {
         // TODO: Send location info to blockchain
 
-        // HQ also keeps track of soup locations and informs newly spawned miners.
-        updateSoupLocations();
+        // HQ also keeps track of locations and informs newly spawned miners.
+        updateLocations();
 
         // Check if we see soup
         MapLocation soupLoc = seeSoup(rc.getType().sensorRadiusSquared);
@@ -134,8 +136,8 @@ public strictfp class RobotPlayer {
     }
 
     static void runMiner() throws GameActionException {
-        // Get status update on soup locations from blockchain
-        updateSoupLocations();
+        // Get status update on locations from blockchain
+        updateLocations();
         // If on a tile with soup info but no soup, inform others
         if (soupLocations.contains(rc.getLocation()) && rc.senseSoup(rc.getLocation()) == 0){
             broadcastLocation(rc.getLocation(), "no soup", 2);
@@ -179,8 +181,11 @@ public strictfp class RobotPlayer {
                     broadcastLocation(rc.getLocation().add(dir), "soup", 1);
                 }
                 // If soup location has no more soup and is known, share the news
-                if (rc.senseSoup(rc.getLocation().add(dir)) == 0 && soupLocations.contains(rc.getLocation().add(dir))) {
-                    broadcastLocation(rc.getLocation().add(dir), "no soup", 1);
+                // Also if there is a nearby soup source unknown, publish it
+                if (rc.senseSoup(rc.getLocation().add(dir)) == 0) {
+                    if (soupLocations.contains(rc.getLocation().add(dir))) {
+                        broadcastLocation(rc.getLocation().add(dir), "no soup", 1);
+                    }
                 }
             }
         }
@@ -191,15 +196,41 @@ public strictfp class RobotPlayer {
             }
         }
 
-        // If inventory is full and not already going to HQ, set target to HQ
-        if (rc.getSoupCarrying() == RobotType.MINER.soupLimit && goingTo != "HQ") {
-            changeTarget(hqLoc, "HQ");
+        // If inventory is full and not already going to a refinery, set target to a refinery
+        if (rc.getSoupCarrying() == RobotType.MINER.soupLimit && goingTo != "refinery") {
+            /*
+            // Search for nearby refineries
+            ArrayList<MapLocation> availableRefineries = new ArrayList<MapLocation>();
+            for (MapLocation ref : refineryLocations) {
+                if (ref.distanceSquaredTo(rc.getLocation()) < 100) {
+                    availableRefineries.add(ref);
+                }
+            }
+            System.out.println(availableRefineries);
+
+            // If there is a nearby refinery, pick a random one, else build one
+            // TODO: What if there is only one and it gets you stuck? Maybe need to pick a closer range
+            // Else if no refinery and enough money to build and broadcast, build one
+            // If all else fails, target the HQ
+            if (availableRefineries.size() > 0) {
+                changeTarget(soupLocations.get(rand.nextInt(availableRefineries.size())), "refinery");
+            } else if (rc.getTeamSoup() > RobotType.REFINERY.cost) {
+                for (Direction d : directions) {
+                    if (tryBuild(RobotType.REFINERY, d)) {
+                        broadcastLocation(rc.getLocation().add(d), "refinery", 1);
+                        break;
+                    }
+                }
+            } else {
+                changeTarget(hqLoc, "refinery");
+            }
+            */
+            changeTarget(hqLoc, "refinery");
         }
 
         // If there is a target, try to go to the target and add new location to the list, if fails or no target, move randomly
         if (target != null) {
             rc.setIndicatorLine(rc.getLocation(), target, 255, 255, 0);
-            // TODO: If going to HQ but wall has already started, build a refinery
             if (goTo(target)) {
                 locationsTowardsTarget.add(rc.getLocation());
                 //If walked towards the same square 3 times, cancel target
@@ -208,6 +239,13 @@ public strictfp class RobotPlayer {
                 }
             }
         }
+        // Else if there is no target, try to go to a place we haven't gone before
+        for (Direction d : directions) {
+            if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
+                locationsTowardsTarget.add(rc.getLocation());
+            }
+        }
+        // If all else fails, move randomly
         goTo(randomDirection());
     }
 
@@ -427,6 +465,7 @@ public strictfp class RobotPlayer {
     // TODO: Learn how to use maps and create a map of resource codes
     // 100 is the code for there is soup around this location.
     // 200 is the code for there is no more soup around this location.
+    // 300 is the code for refinery
 
     /**
      * Broadcasts location with resource info
@@ -444,6 +483,7 @@ public strictfp class RobotPlayer {
             // TODO: When learned how to use maps, change 100 to soup code
             case "soup":        message[1] = 100;   break;
             case "no soup":     message[1] = 200;   break;
+            case "refinery":    message[1] = 300;   break;
         }
 
         message[2] = loc.x;
@@ -454,11 +494,11 @@ public strictfp class RobotPlayer {
     }
 
     /**
-     * Adds or removes soup locations based on last block.
+     * Adds or removes locations based on last block.
      *
      * @throws GameActionException
      */
-    public static void updateSoupLocations() throws GameActionException {
+    public static void updateLocations() throws GameActionException {
         for (Transaction tx : rc.getBlock(rc.getRoundNum() - 1)) {
             int[] message = tx.getMessage();
 
@@ -467,12 +507,24 @@ public strictfp class RobotPlayer {
             }
 
             // TODO: When learned how to use maps, change 100, 200 to soup code
-            if (message[1] == 100 &&
-                    !soupLocations.contains(new MapLocation(message[2], message[3]))) {
-                soupLocations.add(new MapLocation(message[2], message[3]));
-            } else if (message[1] == 200 &&
-                    soupLocations.contains(new MapLocation(message[2], message[3]))) {
-                soupLocations.remove(new MapLocation(message[2], message[3]));
+            switch (message[1]) {
+                case 100: // "soup"
+                    if (!soupLocations.contains(new MapLocation(message[2], message[3]))) {
+                        soupLocations.add(new MapLocation(message[2], message[3]));
+                    }
+                    break;
+
+                case 200: // "no soup"
+                    if (soupLocations.contains(new MapLocation(message[2], message[3]))) {
+                        soupLocations.remove(new MapLocation(message[2], message[3]));
+                    }
+                    break;
+
+                case 300: // "refinery"
+                    if (!refineryLocations.contains(new MapLocation(message[2], message[3]))) {
+                        refineryLocations.add(new MapLocation(message[2], message[3]));
+                    }
+                    break;
             }
         }
     }
