@@ -106,7 +106,9 @@ public strictfp class RobotPlayer {
         // TODO: Send location info to blockchain
 
         // HQ also keeps track of locations and informs newly spawned miners.
-        updateLocations();
+        if (turnCount > 1) {
+            updateLocations();
+        }
 
         // Check if we see soup
         MapLocation soupLoc = seeSoup(rc.getType().sensorRadiusSquared);
@@ -116,8 +118,8 @@ public strictfp class RobotPlayer {
             broadcastLocation(soupLocations.get(0), "soup", 1);
         }
 
-        // If there is a new miner, broadcast any soup location
-        if (newMiner == true) {
+        // If there is a new miner and we know a soup location, broadcast any soup location
+        if (newMiner == true && soupLocations.size() > 0) {
             broadcastLocation(soupLocations.get(0), "soup", 1);
             newMiner = false;
         }
@@ -418,52 +420,24 @@ public strictfp class RobotPlayer {
     }
 
     /**
-     * Returns a list of locations closer than a radius.
+     * If we see soup within a radius, return the tile.
      *
-     * @return vis
-     * @throws GameActionException
-     */
-    static ArrayList<MapLocation> vision(int radius) throws GameActionException {
-        MapLocation loc = rc.getLocation();
-
-        ArrayList<MapLocation> vis = new ArrayList<MapLocation>();
-        vis.add(loc);
-
-        for (int x = 0; x*x <= radius; x++) {
-            for (int y = 0; x*x + y*y <= radius; y++) {
-                if (x == 0 && y == 0) {
-                    continue;
-                }
-
-                if (rc.canSenseLocation(new MapLocation(loc.x + x, loc.y + y))){
-                    vis.add(new MapLocation(loc.x + x, loc.y + y));
-                }
-                if (rc.canSenseLocation(new MapLocation(loc.x + x, loc.y - y))){
-                    vis.add(new MapLocation(loc.x + x, loc.y - y));
-                }
-                if (rc.canSenseLocation(new MapLocation(loc.x - x, loc.y + y))){
-                    vis.add(new MapLocation(loc.x - x, loc.y + y));
-                }
-                if (rc.canSenseLocation(new MapLocation(loc.x - x, loc.y - y))){
-                    vis.add(new MapLocation(loc.x - x, loc.y - y));
-                }
-            }
-        }
-
-        return vis;
-    }
-
-    /**
-     * If we see soup on a non flooded tile, return the tile.
-     *
-     * @return loc
+     * @param radius
+     * @return
      * @throws GameActionException
      */
     static MapLocation seeSoup(int radius) throws GameActionException {
-        ArrayList<MapLocation> vis = vision(radius);
-        for (MapLocation loc : vis) {
-            if (rc.senseSoup(loc) > 0 && !rc.senseFlooding(loc)) {
-                return loc;
+        MapLocation loc = rc.getLocation();
+        int xmax = (int) Math.ceil(Math.sqrt(radius));
+        int ymax = (int) Math.ceil(Math.sqrt(radius));
+
+        for (int x = -xmax; x <= xmax; x++) {
+            for (int y = -ymax; y <= ymax; y++) {
+                MapLocation soupLoc = new MapLocation(loc.x-x, loc.y-y);
+
+                if (valid(soupLoc) && rc.senseSoup(soupLoc) > 0) {
+                    return soupLoc;
+                }
             }
         }
         return null;
