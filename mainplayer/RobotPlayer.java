@@ -138,6 +138,11 @@ public strictfp class RobotPlayer {
     }
 
     static void runMiner() throws GameActionException {
+        // Do not make this list too long for bytecode purposes
+        if (locationsTowardsTarget.size() > 10) {
+            locationsTowardsTarget.remove(0);
+        }
+
         // Get status update on locations from blockchain
         updateLocations();
         // If on a tile with soup info but no soup, inform others
@@ -147,7 +152,7 @@ public strictfp class RobotPlayer {
 
         // In the beginning, send targets directly to where they have been going for a while if we don't already know a soup location
         // Else if they have been going for too long, remove target
-        if (turnCount == 1 && soupLocations.size() == 0) {
+        if (turnCount == 1 && soupLocations.isEmpty()) {
             Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
             changeTarget(rc.getLocation().add(dir).add(dir).add(dir).add(dir).add(dir), "beginning");
         } else if (turnCount == 15 && goingTo == "beginning") {
@@ -165,13 +170,13 @@ public strictfp class RobotPlayer {
         }
 
         // Check if we see soup
-        MapLocation soupLoc = seeSoup(10);
+        MapLocation soupLoc = seeSoup(rc.getType().sensorRadiusSquared);
         // If we see soup, set target to soup
         // TODO: Create a blacklist for soup locations that are unreachable
         // Else if we know where soup is, set target to soup
         if (soupLoc != null) {
             changeTarget(soupLoc, "soup");
-        } else if ((target == null || goingTo == "beginning") && soupLocations.size() > 0) {
+        } else if ((target == null || goingTo == "beginning") && !soupLocations.isEmpty()) {
             changeTarget(soupLocations.get(rand.nextInt(soupLocations.size())), "soup");
         }
 
@@ -208,13 +213,12 @@ public strictfp class RobotPlayer {
                     availableRefineries.add(ref);
                 }
             }
-            System.out.println(availableRefineries);
 
             // If there is a nearby refinery, pick a random one, else build one
             // TODO: What if there is only one and it gets you stuck? Maybe need to pick a closer range
             // Else if no refinery and enough money to build and broadcast, build one
             // If all else fails, target the HQ
-            if (availableRefineries.size() > 0) {
+            if (!availableRefineries.isEmpty()) {
                 MapLocation refLoc = availableRefineries.get(rand.nextInt(availableRefineries.size()));
                 changeTarget(refLoc, "refinery");
             } else if (rc.getTeamSoup() > RobotType.REFINERY.cost) {
@@ -241,14 +245,13 @@ public strictfp class RobotPlayer {
             }
         }
         // Else if there is no target, try to go to a place we haven't gone before
-        for (int i = 0; i < 10; i++) {
-            Direction d = randomDirection();
-            if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
-                locationsTowardsTarget.add(rc.getLocation());
-            }
+        Direction d = randomDirection();
+        if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
+            locationsTowardsTarget.add(rc.getLocation());
         }
         // If all else fails, move randomly
         goTo(randomDirection());
+
     }
 
     static void runRefinery() throws GameActionException {
