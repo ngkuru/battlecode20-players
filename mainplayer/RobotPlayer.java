@@ -239,7 +239,8 @@ public strictfp class RobotPlayer {
             }
         }
         // Else if there is no target, try to go to a place we haven't gone before
-        for (Direction d : directions) {
+        for (int i = 0; i < 10; i++) {
+            Direction d = randomDirection();
             if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
                 locationsTowardsTarget.add(rc.getLocation());
             }
