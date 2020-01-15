@@ -308,6 +308,16 @@ public strictfp class RobotPlayer {
     }
 
     /**
+     * Given a location, return if we can sense it and it is not flooded.
+     *
+     * @param loc
+     * @return
+     */
+    static boolean valid(MapLocation loc) throws GameActionException {
+        return rc.canSenseLocation(loc) && !rc.senseFlooding(loc);
+    }
+
+    /**
      * Try to go towards a direction. If can't go directly, try to go via a 45 or 90 degree angle.
      *
      * @param dir
@@ -319,7 +329,7 @@ public strictfp class RobotPlayer {
                 dir.rotateRight(), dir.rotateLeft().rotateLeft(),
                 dir.rotateRight().rotateRight()};
         for (Direction d : toTry){
-            if (!rc.senseFlooding(rc.getLocation().add(d)) && tryMove(d))
+            if (valid(rc.getLocation().add(d)) && tryMove(d))
                 return true;
         }
         return false;
@@ -357,14 +367,14 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static boolean tryMove(Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canMove(dir) && !rc.senseFlooding(rc.getLocation().add(dir))) {
+        if (rc.isReady() && rc.canMove(dir) && valid(rc.getLocation().add(dir))) {
             rc.move(dir);
             return true;
         } else return false;
     }
 
     /**
-     * Attempts to build a given robot in a given direction if not flooded.
+     * Attempts to build a given robot in a given direction if valid and not flooded.
      *
      * @param type The type of the robot to build
      * @param dir The intended direction of movement
@@ -372,7 +382,7 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canBuildRobot(type, dir) && !rc.senseFlooding(rc.getLocation().add(dir))) {
+        if (rc.isReady() && rc.canBuildRobot(type, dir) && valid(rc.getLocation().add(dir))) {
             rc.buildRobot(type, dir);
             return true;
         } else return false;
