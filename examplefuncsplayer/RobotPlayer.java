@@ -30,7 +30,7 @@ public strictfp class RobotPlayer {
             try {
                 // Here, we've separated the controls into a different method for each RobotType.
                 // You can add the missing ones or rewrite this into your own control structure.
-                System.out.println("I'm a " + rc.getType() + "! Location " + rc.getLocation());
+                // System.out.println("I'm a " + rc.getType() + "! Location " + rc.getLocation());
                 switch (rc.getType()) {
                     case HQ:                 runHQ();                break;
                     case MINER:              runMiner();             break;
@@ -47,7 +47,7 @@ public strictfp class RobotPlayer {
                 Clock.yield();
 
             } catch (Exception e) {
-                System.out.println(rc.getType() + " Exception");
+                // System.out.println(rc.getType() + " Exception");
                 e.printStackTrace();
             }
         }
@@ -62,16 +62,18 @@ public strictfp class RobotPlayer {
         tryBlockchain();
         tryMove(randomDirection());
         if (tryMove(randomDirection()))
-            System.out.println("I moved!");
+            // System.out.println("I moved!");
         // tryBuild(randomSpawnedByMiner(), randomDirection());
         for (Direction dir : directions)
             tryBuild(RobotType.FULFILLMENT_CENTER, dir);
         for (Direction dir : directions)
             if (tryRefine(dir))
-                System.out.println("I refined soup! " + rc.getTeamSoup());
+                break;
+                // System.out.println("I refined soup! " + rc.getTeamSoup());
         for (Direction dir : directions)
             if (tryMine(dir))
-                System.out.println("I mined soup! " + rc.getSoupCarrying());
+                // System.out.println("I mined soup! " + rc.getSoupCarrying());
+                break;
     }
 
     static void runRefinery() throws GameActionException {
@@ -104,7 +106,7 @@ public strictfp class RobotPlayer {
             if (robots.length > 0) {
                 // Pick up a first robot within range
                 rc.pickUpUnit(robots[0].getID());
-                System.out.println("I picked up " + robots[0].getID() + "!");
+                // System.out.println("I picked up " + robots[0].getID() + "!");
             }
         } else {
             // No close robots, so search for robots within sight radius
