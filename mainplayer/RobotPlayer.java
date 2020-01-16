@@ -23,8 +23,11 @@ public strictfp class RobotPlayer {
 
     static int turnCount;
     static int numMiners = 0;
+    static int numLandscapers = 0;
+    static int numDesignSchools = 0;
 
-    static boolean newMiner;
+    static boolean newUnit;
+    static boolean battlecry = false;
 
     static MapLocation hqLoc;
     static MapLocation target;
@@ -84,6 +87,11 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static void findHQ() throws GameActionException {
+        //If we are the HQ, we know the location
+        if (rc.getType() == RobotType.HQ) {
+            hqLoc = rc.getLocation();
+        }
+
         // If we already know where the HQ is, return
         if (hqLoc != null) {
             return;
@@ -99,14 +107,39 @@ public strictfp class RobotPlayer {
             }
         }
 
-        // TODO: Check the blockchain to find HQ location
+        // Search first 5 rounds of blockchain for HQ location
+        for (int i = 1; i < 5 && i < rc.getRoundNum(); i++) {
+            boolean foundHQ = false;
+
+            for (Transaction tx : rc.getBlock(i)) {
+                int[] message = tx.getMessage();
+
+                if (message[0] == teamSecret && message[1] == 500) {
+                    foundHQ = true;
+                    hqLoc = new MapLocation(message[2], message[3]);
+                }
+            }
+
+            if (foundHQ == true) {
+                break;
+            }
+        }
     }
 
     static void runHQ() throws GameActionException {
-        // TODO: Send location info to blockchain
+
+        System.out.println("Start clock " + Clock.getBytecodeNum());
+
+        //In the beginning of the game, broadcast location
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "HQ", 1);
+            battlecry = true;
+        }
 
         // HQ also keeps track of locations and informs newly spawned miners.
-        updateLocations();
+        if (turnCount > 1) {
+            receiveMessage();
+        }
 
         // Check if we see soup
         MapLocation soupLoc = seeSoup(rc.getType().sensorRadiusSquared);
@@ -116,10 +149,10 @@ public strictfp class RobotPlayer {
             broadcastLocation(soupLocations.get(0), "soup", 1);
         }
 
-        // If there is a new miner, broadcast any soup location
-        if (newMiner == true) {
+        // If there is a new miner and we know a soup location, broadcast any soup location
+        if (newUnit == true && soupLocations.size() > 0) {
             broadcastLocation(soupLocations.get(0), "soup", 1);
-            newMiner = false;
+            newUnit = false;
         }
 
         // Create some miners in the beginning of the game
@@ -127,8 +160,25 @@ public strictfp class RobotPlayer {
             for (Direction dir : directions) {
                 if (tryBuild(RobotType.MINER, dir)) {
                     numMiners++;
-                    newMiner = true;
+                    newUnit = true;
                 }
+            }
+        }
+
+        // Check if the design school is still alive
+        if (numDesignSchools > 0) {
+            boolean foundIt = false;
+
+            RobotInfo[] robots = rc.senseNearbyRobots();
+            for (RobotInfo robot : robots) {
+                if (robot.type == RobotType.DESIGN_SCHOOL && robot.team == rc.getTeam()) {
+                    foundIt = true;
+                    break;
+                }
+            }
+
+            if (!foundIt) {
+                broadcastLocation(rc.getLocation(), "no design school", 1);
             }
         }
 
@@ -136,8 +186,13 @@ public strictfp class RobotPlayer {
     }
 
     static void runMiner() throws GameActionException {
+        // Do not make this list too long for bytecode purposes
+        if (locationsTowardsTarget.size() > 10) {
+            locationsTowardsTarget.remove(0);
+        }
+
         // Get status update on locations from blockchain
-        updateLocations();
+        receiveMessage();
         // If on a tile with soup info but no soup, inform others
         if (soupLocations.contains(rc.getLocation()) && rc.senseSoup(rc.getLocation()) == 0){
             broadcastLocation(rc.getLocation(), "no soup", 2);
@@ -145,7 +200,7 @@ public strictfp class RobotPlayer {
 
         // In the beginning, send targets directly to where they have been going for a while if we don't already know a soup location
         // Else if they have been going for too long, remove target
-        if (turnCount == 1 && soupLocations.size() == 0) {
+        if (turnCount == 1 && soupLocations.isEmpty()) {
             Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
             changeTarget(rc.getLocation().add(dir).add(dir).add(dir).add(dir).add(dir), "beginning");
         } else if (turnCount == 15 && goingTo == "beginning") {
@@ -163,13 +218,13 @@ public strictfp class RobotPlayer {
         }
 
         // Check if we see soup
-        MapLocation soupLoc = seeSoup(10);
+        MapLocation soupLoc = seeSoup(rc.getType().sensorRadiusSquared);
         // If we see soup, set target to soup
         // TODO: Create a blacklist for soup locations that are unreachable
         // Else if we know where soup is, set target to soup
         if (soupLoc != null) {
             changeTarget(soupLoc, "soup");
-        } else if ((target == null || goingTo == "beginning") && soupLocations.size() > 0) {
+        } else if ((target == null || goingTo == "beginning") && !soupLocations.isEmpty()) {
             changeTarget(soupLocations.get(rand.nextInt(soupLocations.size())), "soup");
         }
 
@@ -197,6 +252,11 @@ public strictfp class RobotPlayer {
             }
         }
 
+        // Build at least a refinery before we start building a wall.
+        if (refineryLocations.isEmpty()) {
+
+        }
+
         // If inventory is full and not already going to a refinery, set target to a refinery
         if (rc.getSoupCarrying() == RobotType.MINER.soupLimit && goingTo != "refinery") {
             // Search for nearby refineries
@@ -206,13 +266,12 @@ public strictfp class RobotPlayer {
                     availableRefineries.add(ref);
                 }
             }
-            System.out.println(availableRefineries);
 
             // If there is a nearby refinery, pick a random one, else build one
             // TODO: What if there is only one and it gets you stuck? Maybe need to pick a closer range
             // Else if no refinery and enough money to build and broadcast, build one
             // If all else fails, target the HQ
-            if (availableRefineries.size() > 0) {
+            if (!availableRefineries.isEmpty()) {
                 MapLocation refLoc = availableRefineries.get(rand.nextInt(availableRefineries.size()));
                 changeTarget(refLoc, "refinery");
             } else if (rc.getTeamSoup() > RobotType.REFINERY.cost) {
@@ -227,6 +286,14 @@ public strictfp class RobotPlayer {
             }
         }
 
+        // Build some design schools not too close to the HQ
+        if (numDesignSchools < 2 && rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
+            Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
+            tryBuild(RobotType.DESIGN_SCHOOL, dir);
+            tryBuild(RobotType.DESIGN_SCHOOL, dir.rotateLeft());
+            tryBuild(RobotType.DESIGN_SCHOOL, dir.rotateRight());
+        }
+
         // If there is a target, try to go to the target and add new location to the list, if fails or no target, move randomly
         if (target != null) {
             rc.setIndicatorLine(rc.getLocation(), target, 255, 255, 0);
@@ -239,13 +306,13 @@ public strictfp class RobotPlayer {
             }
         }
         // Else if there is no target, try to go to a place we haven't gone before
-        for (Direction d : directions) {
-            if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
-                locationsTowardsTarget.add(rc.getLocation());
-            }
+        Direction d = randomDirection();
+        if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
+            locationsTowardsTarget.add(rc.getLocation());
         }
         // If all else fails, move randomly
         goTo(randomDirection());
+
     }
 
     static void runRefinery() throws GameActionException {
@@ -257,7 +324,20 @@ public strictfp class RobotPlayer {
     }
 
     static void runDesignSchool() throws GameActionException {
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "design school", 1);
+            battlecry = true;
+        }
 
+        if (numLandscapers < 20) {
+            Direction dir = rc.getLocation().directionTo(hqLoc);
+            if (tryBuild(RobotType.LANDSCAPER, dir) ||
+                    tryBuild(RobotType.LANDSCAPER, dir.rotateLeft()) ||
+                    tryBuild(RobotType.LANDSCAPER, dir.rotateRight()) ||
+                    tryBuild(RobotType.LANDSCAPER, randomDirection())) {
+                numLandscapers++;
+            }
+        }
     }
 
     static void runFulfillmentCenter() throws GameActionException {
@@ -265,7 +345,7 @@ public strictfp class RobotPlayer {
     }
 
     static void runLandscaper() throws GameActionException {
-
+        goTo(hqLoc);
     }
 
     static void runDeliveryDrone() throws GameActionException {
@@ -308,6 +388,16 @@ public strictfp class RobotPlayer {
     }
 
     /**
+     * Given a location, return if we can sense it and it is not flooded.
+     *
+     * @param loc
+     * @return
+     */
+    static boolean valid(MapLocation loc) throws GameActionException {
+        return rc.canSenseLocation(loc) && !rc.senseFlooding(loc);
+    }
+
+    /**
      * Try to go towards a direction. If can't go directly, try to go via a 45 or 90 degree angle.
      *
      * @param dir
@@ -319,7 +409,7 @@ public strictfp class RobotPlayer {
                 dir.rotateRight(), dir.rotateLeft().rotateLeft(),
                 dir.rotateRight().rotateRight()};
         for (Direction d : toTry){
-            if (!rc.senseFlooding(rc.getLocation().add(d)) && tryMove(d))
+            if (valid(rc.getLocation().add(d)) && tryMove(d))
                 return true;
         }
         return false;
@@ -357,14 +447,14 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static boolean tryMove(Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canMove(dir) && !rc.senseFlooding(rc.getLocation().add(dir))) {
+        if (rc.isReady() && rc.canMove(dir) && valid(rc.getLocation().add(dir))) {
             rc.move(dir);
             return true;
         } else return false;
     }
 
     /**
-     * Attempts to build a given robot in a given direction if not flooded.
+     * Attempts to build a given robot in a given direction if valid and not flooded.
      *
      * @param type The type of the robot to build
      * @param dir The intended direction of movement
@@ -372,7 +462,7 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canBuildRobot(type, dir) && !rc.senseFlooding(rc.getLocation().add(dir))) {
+        if (rc.isReady() && rc.canBuildRobot(type, dir) && valid(rc.getLocation().add(dir))) {
             rc.buildRobot(type, dir);
             return true;
         } else return false;
@@ -407,52 +497,24 @@ public strictfp class RobotPlayer {
     }
 
     /**
-     * Returns a list of locations closer than a radius.
+     * If we see soup within a radius, return the tile.
      *
-     * @return vis
-     * @throws GameActionException
-     */
-    static ArrayList<MapLocation> vision(int radius) throws GameActionException {
-        MapLocation loc = rc.getLocation();
-
-        ArrayList<MapLocation> vis = new ArrayList<MapLocation>();
-        vis.add(loc);
-
-        for (int x = 0; x*x <= radius; x++) {
-            for (int y = 0; x*x + y*y <= radius; y++) {
-                if (x == 0 && y == 0) {
-                    continue;
-                }
-
-                if (rc.canSenseLocation(new MapLocation(loc.x + x, loc.y + y))){
-                    vis.add(new MapLocation(loc.x + x, loc.y + y));
-                }
-                if (rc.canSenseLocation(new MapLocation(loc.x + x, loc.y - y))){
-                    vis.add(new MapLocation(loc.x + x, loc.y - y));
-                }
-                if (rc.canSenseLocation(new MapLocation(loc.x - x, loc.y + y))){
-                    vis.add(new MapLocation(loc.x - x, loc.y + y));
-                }
-                if (rc.canSenseLocation(new MapLocation(loc.x - x, loc.y - y))){
-                    vis.add(new MapLocation(loc.x - x, loc.y - y));
-                }
-            }
-        }
-
-        return vis;
-    }
-
-    /**
-     * If we see soup on a non flooded tile, return the tile.
-     *
-     * @return loc
+     * @param radius
+     * @return
      * @throws GameActionException
      */
     static MapLocation seeSoup(int radius) throws GameActionException {
-        ArrayList<MapLocation> vis = vision(radius);
-        for (MapLocation loc : vis) {
-            if (rc.senseSoup(loc) > 0 && !rc.senseFlooding(loc)) {
-                return loc;
+        MapLocation loc = rc.getLocation();
+        int xmax = (int) Math.ceil(Math.sqrt(radius));
+        int ymax = (int) Math.ceil(Math.sqrt(radius));
+
+        for (int x = -xmax; x <= xmax; x++) {
+            for (int y = -ymax; y <= ymax; y++) {
+                MapLocation soupLoc = new MapLocation(loc.x-x, loc.y-y);
+
+                if (valid(soupLoc) && rc.senseSoup(soupLoc) > 0) {
+                    return soupLoc;
+                }
             }
         }
         return null;
@@ -462,9 +524,12 @@ public strictfp class RobotPlayer {
     // All messages should start with this
     static int teamSecret = 823642;
     // TODO: Learn how to use maps and create a map of resource codes
-    // 100 is the code for there is soup around this location.
-    // 200 is the code for there is no more soup around this location.
+    // 100 is the code for there is soup around this location
+    // 200 is the code for there is no more soup around this location
     // 300 is the code for refinery
+    // 400 is the code for design school
+    // 500 is the code for HQ
+    // 600 is the code for no more design school at this location
 
     /**
      * Broadcasts location with resource info
@@ -480,9 +545,12 @@ public strictfp class RobotPlayer {
         message[0] = teamSecret;
         switch (resourceType) {
             // TODO: When learned how to use maps, change 100 to soup code
-            case "soup":        message[1] = 100;   break;
-            case "no soup":     message[1] = 200;   break;
-            case "refinery":    message[1] = 300;   break;
+            case "soup":                message[1] = 100;       break;
+            case "no soup":             message[1] = 200;       break;
+            case "refinery":            message[1] = 300;       break;
+            case "design school":       message[1] = 400;       break;
+            case "HQ":                  message[1] = 500;       break;
+            case "no design school":    message[1] = 600;       break;
         }
 
         message[2] = loc.x;
@@ -497,7 +565,7 @@ public strictfp class RobotPlayer {
      *
      * @throws GameActionException
      */
-    public static void updateLocations() throws GameActionException {
+    public static void receiveMessage() throws GameActionException {
         for (Transaction tx : rc.getBlock(rc.getRoundNum() - 1)) {
             int[] message = tx.getMessage();
 
@@ -523,6 +591,14 @@ public strictfp class RobotPlayer {
                     if (!refineryLocations.contains(new MapLocation(message[2], message[3]))) {
                         refineryLocations.add(new MapLocation(message[2], message[3]));
                     }
+                    break;
+
+                case 400: // "design school"
+                    numDesignSchools++;
+                    break;
+
+                case 600: // "design school dead"
+                    numDesignSchools--;
                     break;
             }
         }
