@@ -14,8 +14,7 @@ public class Unit extends Robot {
 
     public void takeTurn() throws GameActionException {
         super.takeTurn();
-
-        System.out.println("I'm a unit");
+        findHQ();
     }
 
     void findHQ() throws GameActionException {
@@ -29,7 +28,7 @@ public class Unit extends Robot {
             }
             if (hqLoc == null)  {
                 // if still null, search the blockchain
-                getHqLocFromBlockchain();
+                comms.getHqLocFromBlockchain();
             }
         }
     }

@@ -1,6 +1,6 @@
 package lectureplayer;
 import battlecode.common.*;
-import java.util.ArrayList
+import java.util.ArrayList;
 
 public class Miner extends Unit {
 
@@ -20,10 +20,10 @@ public class Miner extends Unit {
         comms.updateSoupLocations(soupLocations);
         checkIfSoupGone();
 
-        for (Direction dir : directions)
+        for (Direction dir : Util.directions)
             if (tryRefine(dir))
                 System.out.println("I refined soup! " + rc.getTeamSoup());
-        for (Direction dir : directions)
+        for (Direction dir : Util.directions)
             if (tryMine(dir)) {
                 System.out.println("I mined soup! " + rc.getSoupCarrying());
                 MapLocation soupLoc = rc.getLocation().add(dir);
@@ -33,7 +33,7 @@ public class Miner extends Unit {
             }
 
         if (numDesignSchools < 3){
-            if (tryBuild(RobotType.DESIGN_SCHOOL, randomDirection()))
+            if (tryBuild(RobotType.DESIGN_SCHOOL, Util.randomDirection()))
                 System.out.println("created a design school");
         }
 
