@@ -4,59 +4,30 @@ import java.lang.Math;
 import java.util.ArrayList;
 
 public strictfp class RobotPlayer {
-    static RobotController rc;
-
-    static Direction[] directions = {
-            Direction.NORTH,
-            Direction.NORTHEAST,
-            Direction.EAST,
-            Direction.SOUTHEAST,
-            Direction.SOUTH,
-            Direction.SOUTHWEST,
-            Direction.WEST,
-            Direction.NORTHWEST
-    };    static RobotType[] spawnedByMiner = {RobotType.REFINERY, RobotType.VAPORATOR, RobotType.DESIGN_SCHOOL,
-            RobotType.FULFILLMENT_CENTER, RobotType.NET_GUN};
-
-    static int turnCount;
-    static MapLocation hqLoc;
-    static int numMiners = 0;
-    static int numDesignSchools = 0;
-    static ArrayList<MapLocation> soupLocations = new ArrayList<MapLocation>();
-
     /**
      * run() is the method that is called when a robot is instantiated in the Battlecode world.
      * If this method returns, the robot dies!
      **/
     @SuppressWarnings("unused")
     public static void run(RobotController rc) throws GameActionException {
+        // Since this inherits everything we can call it
+        Robot me = null;
 
-        // This is the RobotController object. You use it to perform actions from this robot,
-        // and to get information on its current status.
-        RobotPlayer.rc = rc;
+        switch (rc.getType()) {
+            case HQ:                    me = new HQ(rc);        break;
+            case REFINERY:
+            case VAPORATOR:
+            case DESIGN_SCHOOL:
+            case FULFILLMENT_CENTER:
+            case NET_GUN:               me = new Building(rc);  break;
+            case MINER:                 me = new Miner(rc);     break;
+            case LANDSCAPER:
+            case DELIVERY_DRONE:        me = new Unit(rc);      break;
+        }
 
-        turnCount = 0;
-
-        System.out.println("I'm a " + rc.getType() + " and I just got created!");
         while (true) {
-            turnCount += 1;
-            // Try/catch blocks stop unhandled exceptions, which cause your robot to explode
             try {
-                // Here, we've separated the controls into a different method for each RobotType.
-                // You can add the missing ones or rewrite this into your own control structure.
-                System.out.println("I'm a " + rc.getType() + "! Location " + rc.getLocation());
-                findHQ();
-                switch (rc.getType()) {
-                    case HQ:                 runHQ();                break;
-                    case MINER:              runMiner();             break;
-                    case REFINERY:           runRefinery();          break;
-                    case VAPORATOR:          runVaporator();         break;
-                    case DESIGN_SCHOOL:      runDesignSchool();      break;
-                    case FULFILLMENT_CENTER: runFulfillmentCenter(); break;
-                    case LANDSCAPER:         runLandscaper();        break;
-                    case DELIVERY_DRONE:     runDeliveryDrone();     break;
-                    case NET_GUN:            runNetGun();            break;
-                }
+                me.takeTurn();
 
                 // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
                 Clock.yield();
@@ -64,22 +35,6 @@ public strictfp class RobotPlayer {
             } catch (Exception e) {
                 System.out.println(rc.getType() + " Exception");
                 e.printStackTrace();
-            }
-        }
-    }
-
-    static void findHQ() throws GameActionException {
-        if (hqLoc == null) {
-            // search surroundings for HQ
-            RobotInfo[] robots = rc.senseNearbyRobots();
-            for (RobotInfo robot : robots) {
-                if (robot.type == RobotType.HQ && robot.team == rc.getTeam()) {
-                    hqLoc = robot.location;
-                }
-            }
-            if (hqLoc == null)  {
-                // if still null, search the blockchain
-                getHqLocFromBlockchain();
             }
         }
     }
@@ -94,43 +49,6 @@ public strictfp class RobotPlayer {
                     numMiners++;
                 }
             }
-        }
-    }
-
-    static void runMiner() throws GameActionException {
-        //TODO: what if there were design schools before this miner was created?
-        updateUnitCounts();
-        updateSoupLocations();
-        checkIfSoupGone();
-
-        for (Direction dir : directions)
-            if (tryRefine(dir))
-                System.out.println("I refined soup! " + rc.getTeamSoup());
-        for (Direction dir : directions)
-            if (tryMine(dir)) {
-                System.out.println("I mined soup! " + rc.getSoupCarrying());
-                MapLocation soupLoc = rc.getLocation().add(dir);
-                if (!soupLocations.contains(soupLoc)) {
-                    broadcastSoupLocation(soupLoc);
-                }
-            }
-
-        if (numDesignSchools < 3){
-            if (tryBuild(RobotType.DESIGN_SCHOOL, randomDirection()))
-                System.out.println("created a design school");
-        }
-
-        if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
-            // time to go back to the HQ
-            if (goTo(hqLoc))
-                System.out.println("moved towards HQ");
-            //TODO: Add else move randomly here, else in the later stages miners stop
-        } else if (soupLocations.size() > 0) { // TODO: pick a random destination from soupLocations, they stack up in one spot
-            goTo(soupLocations.get(0));
-            rc.setIndicatorLine(rc.getLocation(), soupLocations.get(0), 255, 255, 0);
-        } else if (goTo(randomDirection())) {
-            // otherwise, move randomly as usual
-            System.out.println("I moved randomly!");
         }
     }
 
@@ -216,34 +134,6 @@ public strictfp class RobotPlayer {
 
     }
 
-    static void checkIfSoupGone() throws GameActionException {
-        if (soupLocations.size() > 0) {
-            MapLocation targetSoupLoc = soupLocations.get(0);
-            if (rc.canSenseLocation(targetSoupLoc)
-                    && rc.senseSoup(targetSoupLoc) == 0) {
-                soupLocations.remove(0);
-            }
-        }
-    }
-
-    /**
-     * Returns a random Direction.
-     *
-     * @return a random Direction
-     */
-    static Direction randomDirection() {
-        return directions[(int) (Math.random() * directions.length)];
-    }
-
-    /**
-     * Returns a random RobotType spawned by miners.
-     *
-     * @return a random RobotType
-     */
-    static RobotType randomSpawnedByMiner() {
-        return spawnedByMiner[(int) (Math.random() * spawnedByMiner.length)];
-    }
-
     static boolean nearbyRobot(RobotType target) throws GameActionException {
         RobotInfo[] robots = rc.senseNearbyRobots();
         for (RobotInfo r : robots) {
@@ -252,21 +142,6 @@ public strictfp class RobotPlayer {
             }
         }
         return false;
-    }
-
-    static boolean goTo(Direction dir) throws GameActionException {
-        Direction[] toTry = {dir, dir.rotateLeft(),
-                dir.rotateRight(), dir.rotateLeft().rotateLeft(),
-                dir.rotateRight().rotateRight()};
-        for (Direction d : toTry){
-            if (tryMove(d))
-                return true;
-        }
-        return false;
-    }
-
-    static boolean goTo(MapLocation destination) throws GameActionException {
-        return goTo(rc.getLocation().directionTo(destination));
     }
 
     static boolean tryDig() throws GameActionException {
@@ -279,99 +154,9 @@ public strictfp class RobotPlayer {
         return false;
     }
 
-    static boolean tryMove() throws GameActionException {
-        for (Direction dir : directions)
-            if (tryMove(dir))
-                return true;
-        return false;
-        // MapLocation loc = rc.getLocation();
-        // if (loc.x < 10 && loc.x < loc.y)
-        //     return tryMove(Direction.EAST);
-        // else if (loc.x < 10)
-        //     return tryMove(Direction.SOUTH);
-        // else if (loc.x > loc.y)
-        //     return tryMove(Direction.WEST);
-        // else
-        //     return tryMove(Direction.NORTH);
-    }
-
-    /**
-     * Attempts to move in a given direction.
-     *
-     * @param dir The intended direction of movement
-     * @return true if a move was performed
-     * @throws GameActionException
-     */
-    static boolean tryMove(Direction dir) throws GameActionException {
-        // System.out.println("I am trying to move " + dir + "; " + rc.isReady() + " " + rc.getCooldownTurns() + " " + rc.canMove(dir));
-        if (rc.isReady() && rc.canMove(dir)) {
-            rc.move(dir);
-            return true;
-        } else return false;
-    }
-
-    /**
-     * Attempts to build a given robot in a given direction.
-     *
-     * @param type The type of the robot to build
-     * @param dir The intended direction of movement
-     * @return true if a move was performed
-     * @throws GameActionException
-     */
-    static boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canBuildRobot(type, dir)) {
-            rc.buildRobot(type, dir);
-            return true;
-        } else return false;
-    }
-
-    /**
-     * Attempts to mine soup in a given direction.
-     *
-     * @param dir The intended direction of mining
-     * @return true if a move was performed
-     * @throws GameActionException
-     */
-    static boolean tryMine(Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canMineSoup(dir)) {
-            rc.mineSoup(dir);
-            return true;
-        } else return false;
-    }
-
-    /**
-     * Attempts to refine soup in a given direction.
-     *
-     * @param dir The intended direction of refining
-     * @return true if a move was performed
-     * @throws GameActionException
-     */
-    static boolean tryRefine(Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canDepositSoup(dir)) {
-            rc.depositSoup(dir, rc.getSoupCarrying());
-            return true;
-        } else return false;
-    }
-
-
-    static void tryBlockchain() throws GameActionException {
-        if (turnCount < 3) {
-            int[] message = new int[10];
-            for (int i = 0; i < 10; i++) {
-                message[i] = 123;
-            }
-            if (rc.canSubmitTransaction(message, 10))
-                rc.submitTransaction(message, 10);
-        }
-        // System.out.println(rc.getRoundMessages(turnCount-1));
-    }
-
     // Communications stuff
     // all messages from our team should start with this
-    static final int teamSecret = 105797;
-    //the second entry in every message tells us the type of message
-    static final String[] messageType = {"HQ loc", "design school created"};
-
+    
     public static void sendHqLoc(MapLocation loc) throws GameActionException {
         int[] message = new int[7];
         message[0] = teamSecret;
@@ -405,36 +190,4 @@ public strictfp class RobotPlayer {
         if (rc.canSubmitTransaction(message, 3))
             rc.submitTransaction(message, 3);
     }
-
-    // check the latest block for unit creation messages
-    public static void updateUnitCounts() throws GameActionException {
-        for (Transaction tx : rc.getBlock(rc.getRoundNum() - 1)) {
-            int[] mess = tx.getMessage();
-            if (mess[0] == teamSecret && mess[1] == 1) {
-                System.out.println("heard about a cool new school");
-                numDesignSchools += 1;
-            }
-        }
-    }
-
-    public static void broadcastSoupLocation(MapLocation loc) throws GameActionException {
-        int[] message = new int[7];
-        message[0] = teamSecret;
-        message[1] = 2;
-        message[2] = loc.x;
-        message[3] = loc.y;
-        if (rc.canSubmitTransaction(message, 3))
-            rc.submitTransaction(message, 3);
-    }
-
-    public static void updateSoupLocations() throws GameActionException {
-        for (Transaction tx : rc.getBlock(rc.getRoundNum() - 1)) {
-            int[] mess = tx.getMessage();
-            if (mess[0] == teamSecret && mess[1] == 2) {
-                System.out.println("heard about a tasty new soup location");
-                soupLocations.add(new MapLocation(mess[2], mess[3]));
-            }
-        }
-    }
-
 }
