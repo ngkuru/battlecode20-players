@@ -5,7 +5,7 @@ import battlecode.common.GameActionException;
 import battlecode.common.RobotController;
 import battlecode.common.RobotType;
 
-public class HQ extends Building {
+public class HQ extends Shooter {
     static int numMiners = 0;
 
     public HQ(RobotController r) {
