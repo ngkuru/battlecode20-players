@@ -366,9 +366,9 @@ public strictfp class RobotPlayer {
         if (newUnit) {
             boolean adjUnit = false;
             for (Direction d : directions) {
-                if (rc.canSenseLocation(rc.getLocation().add(d)))
+                if (!rc.canSenseLocation(rc.getLocation().add(d)))
                     continue;
-                
+
                 RobotInfo robot = rc.senseRobotAtLocation(rc.getLocation().add(d));
                 if (robot != null && robot.getType() == RobotType.LANDSCAPER && robot.getTeam() == rc.getTeam()) {
                     adjUnit = true;
@@ -782,6 +782,9 @@ public strictfp class RobotPlayer {
                 case 300: // "refinery"
                     if (!refineryLocations.contains(new MapLocation(message[2], message[3]))) {
                         refineryLocations.add(new MapLocation(message[2], message[3]));
+                    }
+                    if (refineryLocations.contains(hqLoc)) {
+                        refineryLocations.remove(hqLoc);
                     }
                     break;
 
