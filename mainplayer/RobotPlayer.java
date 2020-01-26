@@ -254,7 +254,7 @@ public strictfp class RobotPlayer {
 
         // Build at least a refinery before we start building a wall.
         if (refineryLocations.isEmpty()) {
-
+            
         }
 
         // If inventory is full and not already going to a refinery, set target to a refinery
@@ -329,7 +329,7 @@ public strictfp class RobotPlayer {
             battlecry = true;
         }
 
-        if (numLandscapers < 20) {
+        if (numLandscapers < 10) {
             Direction dir = rc.getLocation().directionTo(hqLoc);
             if (tryBuild(RobotType.LANDSCAPER, dir) ||
                     tryBuild(RobotType.LANDSCAPER, dir.rotateLeft()) ||
