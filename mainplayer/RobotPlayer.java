@@ -172,11 +172,9 @@ public strictfp class RobotPlayer {
 
         // Create some miners in the beginning of the game
         if (numMiners < 6) {
-            for (Direction dir : directions) {
-                if (tryBuild(RobotType.MINER, dir)) {
-                    numMiners++;
-                    newUnit = true;
-                }
+            if (tryBuild(RobotType.MINER, randomDirection())) {
+                numMiners++;
+                newUnit = true;
             }
         }
 
@@ -368,6 +366,9 @@ public strictfp class RobotPlayer {
         if (newUnit) {
             boolean adjUnit = false;
             for (Direction d : directions) {
+                if (rc.canSenseLocation(rc.getLocation().add(d)))
+                    continue;
+                
                 RobotInfo robot = rc.senseRobotAtLocation(rc.getLocation().add(d));
                 if (robot != null && robot.getType() == RobotType.LANDSCAPER && robot.getTeam() == rc.getTeam()) {
                     adjUnit = true;
