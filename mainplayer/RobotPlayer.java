@@ -172,11 +172,9 @@ public strictfp class RobotPlayer {
 
         // Create some miners in the beginning of the game
         if (numMiners < 6) {
-            for (Direction dir : directions) {
-                if (tryBuild(RobotType.MINER, dir)) {
-                    numMiners++;
-                    newUnit = true;
-                }
+            if (tryBuild(RobotType.MINER, randomDirection())) {
+                numMiners++;
+                newUnit = true;
             }
         }
 
@@ -368,6 +366,9 @@ public strictfp class RobotPlayer {
         if (newUnit) {
             boolean adjUnit = false;
             for (Direction d : directions) {
+                if (!rc.canSenseLocation(rc.getLocation().add(d)))
+                    continue;
+
                 RobotInfo robot = rc.senseRobotAtLocation(rc.getLocation().add(d));
                 if (robot != null && robot.getType() == RobotType.LANDSCAPER && robot.getTeam() == rc.getTeam()) {
                     adjUnit = true;
@@ -482,7 +483,9 @@ public strictfp class RobotPlayer {
 
         if (goingTo == "delivery" && rc.getLocation().distanceSquaredTo(target) < 3) {
             Direction d = rc.getLocation().directionTo(target);
-            if (tryDrop(d)) {
+            if (rc.senseRobotAtLocation(target) != null) {
+                changeTarget(deliveryLocations.get(rand.nextInt(deliveryLocations.size())), "delivery");
+            } else if (tryDrop(d)) {
                 deliveryLocations.remove(target);
                 changeTarget(null, null);
 
@@ -497,14 +500,17 @@ public strictfp class RobotPlayer {
             if(goTo(target)) {
                 locationsTowardsTarget.add(rc.getLocation());
             }
+        } else {
+            // Else if there is no target, try to go to a place we haven't gone before
+            Direction d = randomDirection();
+            if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
+                locationsTowardsTarget.add(rc.getLocation());
+            } else {
+                // If all else fails, move randomly
+                System.out.println("Moved randomly");
+                goTo(randomDirection());
+            }
         }
-        // Else if there is no target, try to go to a place we haven't gone before
-        Direction d = randomDirection();
-        if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
-            locationsTowardsTarget.add(rc.getLocation());
-        }
-        // If all else fails, move randomly
-        goTo(randomDirection());
     }
 
     static void runNetGun() throws GameActionException {
@@ -634,7 +640,7 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static boolean tryDrop(Direction dir) throws GameActionException {
-        if (rc.isCurrentlyHoldingUnit() && rc.isReady() && valid(rc.getLocation().add(dir))) {
+        if (rc.isCurrentlyHoldingUnit() && rc.isReady() && valid(rc.getLocation().add(dir)) && rc.senseRobotAtLocation(rc.getLocation().add(dir)) == null) {
             rc.dropUnit(dir);
             return true;
         } else return false;
