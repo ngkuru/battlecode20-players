@@ -24,6 +24,7 @@ public strictfp class RobotPlayer {
     static int turnCount;
     static int numMiners = 0;
     static int numLandscapers = 0;
+    static int numDrones = 0;
     static int numDesignSchools = 0;
     static int numFulfillmentCenters = 0;
 
@@ -36,9 +37,10 @@ public strictfp class RobotPlayer {
     static ArrayList<MapLocation> soupLocations = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> locationsTowardsTarget = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> refineryLocations = new ArrayList<MapLocation>();
+    static ArrayList<MapLocation> landscaperLocations = new ArrayList<MapLocation>();
 
     // This will be a string of the robot's current task
-    static String[] goingToCodes = {"soup", "HQ", "beginning", "refinery"};
+    static String[] goingToCodes = {"soup", "HQ", "beginning", "refinery", "landscaper"};
     static String goingTo;
 
     /**
@@ -369,7 +371,6 @@ public strictfp class RobotPlayer {
                     tryBuild(RobotType.LANDSCAPER, dir.rotateLeft()) ||
                     tryBuild(RobotType.LANDSCAPER, dir.rotateRight()) ||
                     tryBuild(RobotType.LANDSCAPER, randomDirection())) {
-                numLandscapers++;
                 newUnit = true;
             }
         }
@@ -380,13 +381,46 @@ public strictfp class RobotPlayer {
             broadcastLocation(rc.getLocation(), "fulfillment center", 1);
             battlecry = true;
         }
+
+        if (numDrones < 1) {
+            if (tryBuild(RobotType.DELIVERY_DRONE, randomDirection())) {
+                numDrones++;
+            }
+        }
     }
 
     static void runLandscaper() throws GameActionException {
-        goTo(hqLoc);
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "landscaper", 1);
+            battlecry = true;
+        }
     }
 
     static void runDeliveryDrone() throws GameActionException {
+        // Drones keep track of landscaper locations.
+        receiveMessage();
+
+        // If it doesn't have a unit nor target set target
+        if (!rc.isCurrentlyHoldingUnit() && goingTo == null && !landscaperLocations.isEmpty()) {
+            changeTarget(landscaperLocations.get(0), "landscaper");
+        }
+
+        System.out.println(goingTo);
+
+        // If target is nearby pick up unit, set target to hq
+        if (goingTo == "landscaper" && rc.getLocation().distanceSquaredTo(target) < 3) {
+            if (rc.canPickUpUnit(rc.senseRobotAtLocation(target).getID())) {
+                rc.pickUpUnit(rc.senseRobotAtLocation(target).getID());
+                landscaperLocations.remove(target);
+                changeTarget(hqLoc, "HQ");
+            }
+        } else if (goingTo == "landscaper") {
+            goTo(target);
+        }
+
+        if (goingTo == "HQ") {
+            goTo(target);
+        }
 
     }
 
@@ -569,6 +603,7 @@ public strictfp class RobotPlayer {
     // 500 is the code for HQ
     // 600 is the code for no more design school at this location
     // 700 is the code for fulfillment center
+    // 800 is the code for landscaper
 
     /**
      * Broadcasts location with resource info
@@ -591,6 +626,7 @@ public strictfp class RobotPlayer {
             case "HQ":                  message[1] = 500;       break;
             case "no design school":    message[1] = 600;       break;
             case "fulfillment center":  message[1] = 700;       break;
+            case "landscaper":          message[1] = 800;       break;
         }
 
         message[2] = loc.x;
@@ -645,6 +681,10 @@ public strictfp class RobotPlayer {
 
                 case 700: // "fulfillment center"
                     numFulfillmentCenters++;
+                    break;
+
+                case 800: // "landscaper"
+                    landscaperLocations.add(new MapLocation(message[2], message[3]));
                     break;
             }
         }
