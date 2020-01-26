@@ -483,7 +483,9 @@ public strictfp class RobotPlayer {
 
         if (goingTo == "delivery" && rc.getLocation().distanceSquaredTo(target) < 3) {
             Direction d = rc.getLocation().directionTo(target);
-            if (tryDrop(d)) {
+            if (rc.senseRobotAtLocation(target) != null) {
+                changeTarget(deliveryLocations.get(rand.nextInt(deliveryLocations.size())), "delivery");
+            } else if (tryDrop(d)) {
                 deliveryLocations.remove(target);
                 changeTarget(null, null);
 
@@ -635,7 +637,7 @@ public strictfp class RobotPlayer {
      * @throws GameActionException
      */
     static boolean tryDrop(Direction dir) throws GameActionException {
-        if (rc.isCurrentlyHoldingUnit() && rc.isReady() && valid(rc.getLocation().add(dir))) {
+        if (rc.isCurrentlyHoldingUnit() && rc.isReady() && valid(rc.getLocation().add(dir)) && rc.senseRobotAtLocation(rc.getLocation().add(dir)) == null) {
             rc.dropUnit(dir);
             return true;
         } else return false;
