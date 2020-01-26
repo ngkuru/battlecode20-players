@@ -127,9 +127,6 @@ public strictfp class RobotPlayer {
     }
 
     static void runHQ() throws GameActionException {
-
-        System.out.println("Start clock " + Clock.getBytecodeNum());
-
         //In the beginning of the game, broadcast location
         if (!battlecry) {
             broadcastLocation(rc.getLocation(), "HQ", 1);
@@ -253,7 +250,7 @@ public strictfp class RobotPlayer {
         }
 
         // Build at least a refinery before we start building a wall.
-        if (refineryLocations.isEmpty()) {
+        if (refineryLocations.size() == 1) {
             if (rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
                 Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
                 tryBuild(RobotType.REFINERY, dir);
