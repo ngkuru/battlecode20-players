@@ -25,6 +25,7 @@ public strictfp class RobotPlayer {
     static int numMiners = 0;
     static int numLandscapers = 0;
     static int numDesignSchools = 0;
+    static int numFulfillmentCenters = 0;
 
     static boolean newUnit;
     static boolean battlecry = false;
@@ -262,6 +263,16 @@ public strictfp class RobotPlayer {
             }
         }
 
+        // Build at least a fulfillment center before we start building a wall.
+        if (numFulfillmentCenters < 1) {
+            if (rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
+                Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
+                tryBuild(RobotType.FULFILLMENT_CENTER, dir);
+                tryBuild(RobotType.FULFILLMENT_CENTER, dir.rotateLeft());
+                tryBuild(RobotType.FULFILLMENT_CENTER, dir.rotateRight());
+            }
+        }
+
         // If inventory is full and not already going to a refinery, set target to a refinery
         if (rc.getSoupCarrying() == RobotType.MINER.soupLimit && goingTo != "refinery") {
             // Search for nearby refineries
@@ -365,7 +376,10 @@ public strictfp class RobotPlayer {
     }
 
     static void runFulfillmentCenter() throws GameActionException {
-
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "fulfillment center", 1);
+            battlecry = true;
+        }
     }
 
     static void runLandscaper() throws GameActionException {
@@ -554,6 +568,7 @@ public strictfp class RobotPlayer {
     // 400 is the code for design school
     // 500 is the code for HQ
     // 600 is the code for no more design school at this location
+    // 700 is the code for fulfillment center
 
     /**
      * Broadcasts location with resource info
@@ -575,6 +590,7 @@ public strictfp class RobotPlayer {
             case "design school":       message[1] = 400;       break;
             case "HQ":                  message[1] = 500;       break;
             case "no design school":    message[1] = 600;       break;
+            case "fulfillment center":  message[1] = 700;       break;
         }
 
         message[2] = loc.x;
@@ -625,6 +641,10 @@ public strictfp class RobotPlayer {
                 case 600: // "design school dead"
                     numDesignSchools--;
                     designSchool = null;
+                    break;
+
+                case 700: // "fulfillment center"
+                    numFulfillmentCenters++;
                     break;
             }
         }
