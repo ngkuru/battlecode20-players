@@ -163,6 +163,7 @@ public strictfp class RobotPlayer {
             }
         }
 
+        /*
         // Check if the design school is still alive
         if (numDesignSchools > 0) {
             boolean foundIt = false;
@@ -179,6 +180,7 @@ public strictfp class RobotPlayer {
                 broadcastLocation(rc.getLocation(), "no design school", 1);
             }
         }
+         */
 
         // TODO: Make the HQ shoot drones
     }
@@ -335,13 +337,29 @@ public strictfp class RobotPlayer {
             battlecry = true;
         }
 
-        if (numLandscapers < 10) {
+        // Check if there is an adjacent landscaper that hasn't been picked up
+        if (newUnit) {
+            boolean adjUnit = false;
+            for (Direction d : directions) {
+                RobotInfo robot = rc.senseRobotAtLocation(rc.getLocation().add(d));
+                if (robot != null && robot.getType() == RobotType.LANDSCAPER && robot.getTeam() == rc.getTeam()) {
+                    adjUnit = true;
+                }
+            }
+            if (!adjUnit) {
+                newUnit = false;
+            }
+        }
+
+
+        if (!newUnit) {
             Direction dir = rc.getLocation().directionTo(hqLoc);
             if (tryBuild(RobotType.LANDSCAPER, dir) ||
                     tryBuild(RobotType.LANDSCAPER, dir.rotateLeft()) ||
                     tryBuild(RobotType.LANDSCAPER, dir.rotateRight()) ||
                     tryBuild(RobotType.LANDSCAPER, randomDirection())) {
                 numLandscapers++;
+                newUnit = true;
             }
         }
     }
