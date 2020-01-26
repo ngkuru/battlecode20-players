@@ -484,8 +484,12 @@ public strictfp class RobotPlayer {
             Direction d = rc.getLocation().directionTo(target);
             if (tryDrop(d)) {
                 deliveryLocations.remove(target);
-                System.out.println(deliveryLocations);
                 changeTarget(null, null);
+
+                if (deliveryLocations.isEmpty()) {
+                    builtWall = true;
+                    broadcastLocation(rc.getLocation(), "built wall", 1);
+                }
             }
         }
 
