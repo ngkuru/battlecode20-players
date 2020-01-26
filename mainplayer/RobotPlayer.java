@@ -18,25 +18,43 @@ public strictfp class RobotPlayer {
             Direction.SOUTHWEST,
     };
 
+    static Direction[] directionsOrdered = {
+            Direction.EAST,
+            Direction.NORTHEAST,
+            Direction.NORTH,
+            Direction.NORTHWEST,
+            Direction.WEST,
+            Direction.SOUTHWEST,
+            Direction.SOUTH,
+            Direction.SOUTHEAST,
+    };
+
     static RobotType[] spawnedByMiner = {RobotType.REFINERY, RobotType.VAPORATOR, RobotType.DESIGN_SCHOOL,
             RobotType.FULFILLMENT_CENTER, RobotType.NET_GUN};
 
     static int turnCount;
     static int numMiners = 0;
     static int numLandscapers = 0;
+    static int numDrones = 0;
     static int numDesignSchools = 0;
+    static int numFulfillmentCenters = 0;
 
     static boolean newUnit;
     static boolean battlecry = false;
+    static boolean initializedDelivery = false;
+    static boolean builtWall = false;
 
     static MapLocation hqLoc;
     static MapLocation target;
+    static MapLocation designSchool;
     static ArrayList<MapLocation> soupLocations = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> locationsTowardsTarget = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> refineryLocations = new ArrayList<MapLocation>();
+    static ArrayList<MapLocation> landscaperLocations = new ArrayList<MapLocation>();
+    static ArrayList<MapLocation> deliveryLocations = new ArrayList<MapLocation>();
 
     // This will be a string of the robot's current task
-    static String[] goingToCodes = {"soup", "HQ", "beginning", "refinery"};
+    static String[] goingToCodes = {"soup", "HQ", "beginning", "refinery", "landscaper", "delivery"};
     static String goingTo;
 
     /**
@@ -127,9 +145,6 @@ public strictfp class RobotPlayer {
     }
 
     static void runHQ() throws GameActionException {
-
-        System.out.println("Start clock " + Clock.getBytecodeNum());
-
         //In the beginning of the game, broadcast location
         if (!battlecry) {
             broadcastLocation(rc.getLocation(), "HQ", 1);
@@ -165,6 +180,7 @@ public strictfp class RobotPlayer {
             }
         }
 
+        /*
         // Check if the design school is still alive
         if (numDesignSchools > 0) {
             boolean foundIt = false;
@@ -181,6 +197,7 @@ public strictfp class RobotPlayer {
                 broadcastLocation(rc.getLocation(), "no design school", 1);
             }
         }
+         */
 
         // TODO: Make the HQ shoot drones
     }
@@ -253,8 +270,23 @@ public strictfp class RobotPlayer {
         }
 
         // Build at least a refinery before we start building a wall.
-        if (refineryLocations.isEmpty()) {
+        if (refineryLocations.size() == 1) {
+            if (rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
+                Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
+                tryBuild(RobotType.REFINERY, dir);
+                tryBuild(RobotType.REFINERY, dir.rotateLeft());
+                tryBuild(RobotType.REFINERY, dir.rotateRight());
+            }
+        }
 
+        // Build at least a fulfillment center before we start building a wall.
+        if (numFulfillmentCenters < 1) {
+            if (rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
+                Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
+                tryBuild(RobotType.FULFILLMENT_CENTER, dir);
+                tryBuild(RobotType.FULFILLMENT_CENTER, dir.rotateLeft());
+                tryBuild(RobotType.FULFILLMENT_CENTER, dir.rotateRight());
+            }
         }
 
         // If inventory is full and not already going to a refinery, set target to a refinery
@@ -269,7 +301,7 @@ public strictfp class RobotPlayer {
 
             // If there is a nearby refinery, pick a random one, else build one
             // TODO: What if there is only one and it gets you stuck? Maybe need to pick a closer range
-            // Else if no refinery and enough money to build and broadcast, build one
+            // Else if no refinery and enough money to build, build one
             // If all else fails, target the HQ
             if (!availableRefineries.isEmpty()) {
                 MapLocation refLoc = availableRefineries.get(rand.nextInt(availableRefineries.size()));
@@ -277,7 +309,6 @@ public strictfp class RobotPlayer {
             } else if (rc.getTeamSoup() > RobotType.REFINERY.cost) {
                 for (Direction d : directions) {
                     if (tryBuild(RobotType.REFINERY, d)) {
-                        broadcastLocation(rc.getLocation().add(d), "refinery", 1);
                         break;
                     }
                 }
@@ -287,7 +318,8 @@ public strictfp class RobotPlayer {
         }
 
         // Build some design schools not too close to the HQ
-        if (numDesignSchools < 2 && rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
+        if (numDesignSchools < 1 && rc.getTeamSoup() > RobotType.REFINERY.cost + RobotType.DESIGN_SCHOOL.cost &&
+                rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
             Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
             tryBuild(RobotType.DESIGN_SCHOOL, dir);
             tryBuild(RobotType.DESIGN_SCHOOL, dir.rotateLeft());
@@ -316,7 +348,10 @@ public strictfp class RobotPlayer {
     }
 
     static void runRefinery() throws GameActionException {
-
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "refinery", 1);
+            battlecry = true;
+        }
     }
 
     static void runVaporator() throws GameActionException {
@@ -329,27 +364,147 @@ public strictfp class RobotPlayer {
             battlecry = true;
         }
 
-        if (numLandscapers < 20) {
+        // Check if there is an adjacent landscaper that hasn't been picked up
+        if (newUnit) {
+            boolean adjUnit = false;
+            for (Direction d : directions) {
+                RobotInfo robot = rc.senseRobotAtLocation(rc.getLocation().add(d));
+                if (robot != null && robot.getType() == RobotType.LANDSCAPER && robot.getTeam() == rc.getTeam()) {
+                    adjUnit = true;
+                }
+            }
+            if (!adjUnit) {
+                newUnit = false;
+            }
+        }
+
+
+        if (!newUnit && numLandscapers < 20) {
             Direction dir = rc.getLocation().directionTo(hqLoc);
             if (tryBuild(RobotType.LANDSCAPER, dir) ||
                     tryBuild(RobotType.LANDSCAPER, dir.rotateLeft()) ||
                     tryBuild(RobotType.LANDSCAPER, dir.rotateRight()) ||
                     tryBuild(RobotType.LANDSCAPER, randomDirection())) {
-                numLandscapers++;
+                newUnit = true;
             }
         }
     }
 
     static void runFulfillmentCenter() throws GameActionException {
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "fulfillment center", 1);
+            battlecry = true;
+        }
 
+        if (numDrones < 1) {
+            if (tryBuild(RobotType.DELIVERY_DRONE, randomDirection())) {
+                numDrones++;
+            }
+        }
     }
 
     static void runLandscaper() throws GameActionException {
-        goTo(hqLoc);
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "landscaper", 1);
+            battlecry = true;
+        }
+
+        // Landscapers keep track of if the wall is built
+        receiveMessage();
+
+        if (builtWall && rc.getLocation().distanceSquaredTo(hqLoc) > 5) {
+            goTo(hqLoc);
+        }
+
+        if (rc.getLocation().distanceSquaredTo(hqLoc) < 5) {
+            if (rc.getDirtCarrying() == 0) {
+                Direction d = rc.getLocation().directionTo(hqLoc).opposite();
+                if (tryDig(d) || tryDig(d.rotateLeft()) || tryDig(d.rotateRight())){
+                    // TODO: Make this less meaningless
+                }
+            } else {
+                System.out.println(rc.getLocation().directionTo(hqLoc));
+                Direction directionToBuild = null;
+                for (Direction d : directions) {
+                    if (!rc.canSenseLocation(rc.getLocation().add(d)) ||
+                            rc.getLocation().add(d).distanceSquaredTo(hqLoc) > 2 ||
+                            rc.getLocation().add(d).distanceSquaredTo(hqLoc) == 0) {
+                        System.out.println("continued " + d);
+                        continue;
+                    }
+
+                    if (directionToBuild == null || rc.senseElevation(rc.getLocation().add(d)) < rc.senseElevation(rc.getLocation().add(directionToBuild))) {
+                        System.out.println("choosing " + d);
+                        directionToBuild = d;
+                    }
+                    System.out.println("skipping " + d);
+                }
+
+                System.out.println("depositing at " + directionToBuild);
+                if (rc.isReady() && rc.canDepositDirt(directionToBuild))
+                    rc.depositDirt(directionToBuild);
+            }
+        }
     }
 
     static void runDeliveryDrone() throws GameActionException {
+        // Drones keep track of landscaper locations.
+        receiveMessage();
 
+        // If it doesn't have a unit nor target set target
+        if (!builtWall && !rc.isCurrentlyHoldingUnit() && goingTo == null && !landscaperLocations.isEmpty()) {
+            changeTarget(landscaperLocations.get(0), "landscaper");
+        }
+
+        // If target is nearby pick up unit, set target to hq
+        if (goingTo == "landscaper" && rc.getLocation().distanceSquaredTo(target) < 3) {
+            if (rc.canPickUpUnit(rc.senseRobotAtLocation(target).getID())) {
+                rc.pickUpUnit(rc.senseRobotAtLocation(target).getID());
+                landscaperLocations.remove(target);
+                changeTarget(hqLoc, "HQ");
+            }
+        }
+
+        if (!builtWall && goingTo == "HQ") {
+            if (!initializedDelivery && rc.getLocation().distanceSquaredTo(hqLoc) < 5) {
+                for (Direction d : directionsOrdered) {
+                    if (rc.canSenseLocation(hqLoc.add(d))) {
+                        deliveryLocations.add(hqLoc.add(d));
+                    }
+                }
+                initializedDelivery = true;
+            }
+
+            if (initializedDelivery) {
+                changeTarget(deliveryLocations.get(rand.nextInt(deliveryLocations.size())), "delivery");
+            }
+        }
+
+        if (goingTo == "delivery" && rc.getLocation().distanceSquaredTo(target) < 3) {
+            Direction d = rc.getLocation().directionTo(target);
+            if (tryDrop(d)) {
+                deliveryLocations.remove(target);
+                changeTarget(null, null);
+
+                if (deliveryLocations.isEmpty()) {
+                    builtWall = true;
+                    broadcastLocation(rc.getLocation(), "built wall", 1);
+                }
+            }
+        }
+
+        if (target != null) {
+            if(goTo(target)) {
+                locationsTowardsTarget.add(rc.getLocation());
+            }
+        }
+        // Else if there is no target, try to go to a place we haven't gone before
+        Direction d = randomDirection();
+        if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
+            locationsTowardsTarget.add(rc.getLocation());
+        }
+        // If all else fails, move randomly
+        goTo(randomDirection());
     }
 
     static void runNetGun() throws GameActionException {
@@ -409,6 +564,9 @@ public strictfp class RobotPlayer {
                 dir.rotateRight(), dir.rotateLeft().rotateLeft(),
                 dir.rotateRight().rotateRight()};
         for (Direction d : toTry){
+            if (!locationsTowardsTarget.isEmpty() && locationsTowardsTarget.get(locationsTowardsTarget.size() - 1) == rc.getLocation().add(d)) {
+                continue;
+            }
             if (valid(rc.getLocation().add(d)) && tryMove(d))
                 return true;
         }
@@ -464,6 +622,34 @@ public strictfp class RobotPlayer {
     static boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
         if (rc.isReady() && rc.canBuildRobot(type, dir) && valid(rc.getLocation().add(dir))) {
             rc.buildRobot(type, dir);
+            return true;
+        } else return false;
+    }
+
+    /**
+     * Attempts to drop a unit if holding in a given direction if valid and not flooded.
+     *
+     * @param dir The intended direction of movement
+     * @return true if a move was performed
+     * @throws GameActionException
+     */
+    static boolean tryDrop(Direction dir) throws GameActionException {
+        if (rc.isCurrentlyHoldingUnit() && rc.isReady() && valid(rc.getLocation().add(dir))) {
+            rc.dropUnit(dir);
+            return true;
+        } else return false;
+    }
+
+    /**
+     * Attempts to dig dirt from a direction if below dirt limit.
+     *
+     * @param dir The intended direction of movement
+     * @return true if a move was performed
+     * @throws GameActionException
+     */
+    static boolean tryDig(Direction dir) throws GameActionException {
+        if (rc.getDirtCarrying() < RobotType.LANDSCAPER.dirtLimit && rc.isReady() && rc.canSenseLocation(rc.getLocation().add(dir)) && rc.canDigDirt(dir)) {
+            rc.digDirt(dir);
             return true;
         } else return false;
     }
@@ -530,6 +716,8 @@ public strictfp class RobotPlayer {
     // 400 is the code for design school
     // 500 is the code for HQ
     // 600 is the code for no more design school at this location
+    // 700 is the code for fulfillment center
+    // 800 is the code for landscaper
 
     /**
      * Broadcasts location with resource info
@@ -551,6 +739,9 @@ public strictfp class RobotPlayer {
             case "design school":       message[1] = 400;       break;
             case "HQ":                  message[1] = 500;       break;
             case "no design school":    message[1] = 600;       break;
+            case "fulfillment center":  message[1] = 700;       break;
+            case "landscaper":          message[1] = 800;       break;
+            case "built wall":          message[1] = 900;       break;
         }
 
         message[2] = loc.x;
@@ -595,10 +786,24 @@ public strictfp class RobotPlayer {
 
                 case 400: // "design school"
                     numDesignSchools++;
+                    designSchool = new MapLocation(message[2], message[3]);
                     break;
 
                 case 600: // "design school dead"
                     numDesignSchools--;
+                    designSchool = null;
+                    break;
+
+                case 700: // "fulfillment center"
+                    numFulfillmentCenters++;
+                    break;
+
+                case 800: // "landscaper"
+                    landscaperLocations.add(new MapLocation(message[2], message[3]));
+                    break;
+
+                case 900: // "built wall"
+                    builtWall = true;
                     break;
             }
         }
