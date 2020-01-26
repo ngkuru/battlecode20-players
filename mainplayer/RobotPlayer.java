@@ -274,7 +274,7 @@ public strictfp class RobotPlayer {
 
             // If there is a nearby refinery, pick a random one, else build one
             // TODO: What if there is only one and it gets you stuck? Maybe need to pick a closer range
-            // Else if no refinery and enough money to build and broadcast, build one
+            // Else if no refinery and enough money to build, build one
             // If all else fails, target the HQ
             if (!availableRefineries.isEmpty()) {
                 MapLocation refLoc = availableRefineries.get(rand.nextInt(availableRefineries.size()));
@@ -282,7 +282,6 @@ public strictfp class RobotPlayer {
             } else if (rc.getTeamSoup() > RobotType.REFINERY.cost) {
                 for (Direction d : directions) {
                     if (tryBuild(RobotType.REFINERY, d)) {
-                        broadcastLocation(rc.getLocation().add(d), "refinery", 1);
                         break;
                     }
                 }
@@ -322,7 +321,10 @@ public strictfp class RobotPlayer {
     }
 
     static void runRefinery() throws GameActionException {
-
+        if (!battlecry) {
+            broadcastLocation(rc.getLocation(), "refinery", 1);
+            battlecry = true;
+        }
     }
 
     static void runVaporator() throws GameActionException {
