@@ -500,14 +500,17 @@ public strictfp class RobotPlayer {
             if(goTo(target)) {
                 locationsTowardsTarget.add(rc.getLocation());
             }
+        } else {
+            // Else if there is no target, try to go to a place we haven't gone before
+            Direction d = randomDirection();
+            if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
+                locationsTowardsTarget.add(rc.getLocation());
+            } else {
+                // If all else fails, move randomly
+                System.out.println("Moved randomly");
+                goTo(randomDirection());
+            }
         }
-        // Else if there is no target, try to go to a place we haven't gone before
-        Direction d = randomDirection();
-        if (!locationsTowardsTarget.contains(rc.getLocation().add(d)) && tryMove(d)) {
-            locationsTowardsTarget.add(rc.getLocation());
-        }
-        // If all else fails, move randomly
-        goTo(randomDirection());
     }
 
     static void runNetGun() throws GameActionException {
@@ -784,9 +787,6 @@ public strictfp class RobotPlayer {
                 case 300: // "refinery"
                     if (!refineryLocations.contains(new MapLocation(message[2], message[3]))) {
                         refineryLocations.add(new MapLocation(message[2], message[3]));
-                    }
-                    if (refineryLocations.contains(hqLoc)) {
-                        refineryLocations.remove(hqLoc);
                     }
                     break;
 
