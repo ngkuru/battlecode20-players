@@ -288,7 +288,7 @@ public strictfp class RobotPlayer {
         }
 
         // Build some design schools not too close to the HQ
-        if (numDesignSchools < 2 && rc.getTeamSoup() > RobotType.REFINERY.cost + RobotType.DESIGN_SCHOOL.cost &&
+        if (numDesignSchools < 1 && rc.getTeamSoup() > RobotType.REFINERY.cost + RobotType.DESIGN_SCHOOL.cost &&
                 rc.getLocation().distanceSquaredTo(hqLoc) > 8 && rc.getLocation().distanceSquaredTo(hqLoc) < 26) {
             Direction dir = rc.getLocation().directionTo(hqLoc).opposite();
             tryBuild(RobotType.DESIGN_SCHOOL, dir);
