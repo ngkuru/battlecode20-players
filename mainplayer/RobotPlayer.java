@@ -31,6 +31,7 @@ public strictfp class RobotPlayer {
 
     static MapLocation hqLoc;
     static MapLocation target;
+    static MapLocation designSchool;
     static ArrayList<MapLocation> soupLocations = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> locationsTowardsTarget = new ArrayList<MapLocation>();
     static ArrayList<MapLocation> refineryLocations = new ArrayList<MapLocation>();
@@ -600,10 +601,12 @@ public strictfp class RobotPlayer {
 
                 case 400: // "design school"
                     numDesignSchools++;
+                    designSchool = new MapLocation(message[2], message[3]);
                     break;
 
                 case 600: // "design school dead"
                     numDesignSchools--;
+                    designSchool = null;
                     break;
             }
         }
